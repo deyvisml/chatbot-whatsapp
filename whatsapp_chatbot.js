@@ -92,7 +92,7 @@ const send_product_oxford_learn_list = (client, chat_id) => {
     },
   ];
   const list = new List(
-    "Seleccione un nivel",
+    "Seleccione el nivel para el cual desea adquirir el código de la plataforma Oxford Learn",
     "Niveles",
     sections,
     name_store,
@@ -101,11 +101,18 @@ const send_product_oxford_learn_list = (client, chat_id) => {
   client.sendMessage(chat_id, list);
 };
 
-const send_message_product_oxford_learn_item = (
+const send_message_product_oxford_learn_item = async (
   client,
   chat_id,
-  name_nivel
+  name_nivel,
+  program_name
 ) => {
+  const media = await MessageMedia.fromFilePath(
+    `images/codes_mockup/${program_name}.png`
+  );
+
+  await client.sendMessage(chat_id, media);
+
   const buttons = new Buttons(
     `*.: Información :.*
 --------------------------
@@ -162,8 +169,8 @@ const send_product_oxford_solver = async (client, chat_id) => {
 
 ✅Compra segura✅`,
     [
-      { body: "Formas de pago Oxford Solver" },
       { body: "Tutorial Oxford Solver" },
+      { body: "Formas de pago Oxford Solver" },
     ],
     name_store,
     "Tienda certificada"
@@ -226,8 +233,9 @@ const send_books_list = (client, chat_id) => {
 
 const send_book_item = async (client, chat_id, details) => {
   const { book_data, name_cover, id_button } = details;
+
   const media = await MessageMedia.fromFilePath(
-    `images/cover_books/${name_cover}`
+    `images/books_mockup/${name_cover}`
   );
   await client.sendMessage(chat_id, media, {
     caption: `📚 *${book_data.name_book}* 📚
@@ -240,6 +248,7 @@ const send_book_item = async (client, chat_id, details) => {
 Adquiere tu código para la plataforma Oxford Learn en nuestra tienda: ${book_data.url_oxford_code}`,
   });
 
+  // Se procede a comentar por que la libreria no permite enviar archivos pesados :(
   const buttons = new Buttons(
     `Seleccione una opción`,
     [
@@ -254,6 +263,7 @@ Adquiere tu código para la plataforma Oxford Learn en nuestra tienda: ${book_da
 };
 
 const send_book_file = async (client, chat_id, id_button) => {
+  /* No working: la libreria solo permite enviar ficheros de poco tamaño (aprox menos de 5mb) */
   if (!id_button) return;
 
   let name_book = "";
@@ -330,8 +340,6 @@ const send_book_file = async (client, chat_id, id_button) => {
       console.log("Problemas al enviar el archivo :(");
       console.log(err);
     });
-
-  return;
 };
 
 const make_client = async (client, chat_id, user_id) => {
@@ -607,41 +615,51 @@ const main = async (message) => {
         }
         break;
       case "Básico 1 a 6\nCELEN UNA PUNO":
-        send_message_product_oxford_learn_item(client, chat_id, "Básico 1 a 6");
+        send_message_product_oxford_learn_item(
+          client,
+          chat_id,
+          "Básico 1 a 6",
+          "a1"
+        );
         break;
       case "Básico 7 a 12\nCELEN UNA PUNO":
         send_message_product_oxford_learn_item(
           client,
           chat_id,
-          "Básico 7 a 12"
+          "Básico 7 a 12",
+          "a2"
         );
         break;
       case "Pre intermedio 1 a 6\nCELEN UNA PUNO":
         send_message_product_oxford_learn_item(
           client,
           chat_id,
-          "Pre intermedio 1 a 6"
+          "Pre intermedio 1 a 6",
+          "b1"
         );
         break;
       case "Intermedio 1 a 5\nCELEN UNA PUNO":
         send_message_product_oxford_learn_item(
           client,
           chat_id,
-          "Intermedio 1 a 5"
+          "Intermedio 1 a 5",
+          "b1+"
         );
         break;
       case "Superior 1 a 5\nCELEN UNA PUNO":
         send_message_product_oxford_learn_item(
           client,
           chat_id,
-          "Superior 1 a 5"
+          "Superior 1 a 5",
+          "b2"
         );
         break;
       case "Avanzando 1 a 5\nCELEN UNA PUNO":
         send_message_product_oxford_learn_item(
           client,
           chat_id,
-          "Avanzando 1 a 5"
+          "Avanzando 1 a 5",
+          "c1"
         );
         break;
       case "!pagos":
