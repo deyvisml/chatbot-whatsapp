@@ -10,12 +10,8 @@ const qrcode = require("qrcode-terminal");
 const mongoose = require("mongoose");
 const timeZone = require("mongoose-timezone");
 const dotenv = require("dotenv");
-const ChatGPT = require("./chatgpt");
 
 dotenv.config();
-
-// Chat GPT
-const bot = new ChatGPT(process.env.OPENAI_API_KEY);
 
 // ============= MongoDB (START) =============
 async function connect_db(uri) {
@@ -30,6 +26,7 @@ async function connect_db(uri) {
 }
 
 const uri = "mongodb://127.0.0.1:27017/whatsapp_chatbot";
+
 connect_db(uri);
 // define Schema
 const UserSchema = mongoose.Schema({
@@ -40,13 +37,46 @@ const UserSchema = mongoose.Schema({
   is_client_date: String,
   has_permissons_date: String,
 });
+
+const CodeOLScheme = mongoose.Schema({
+  code: String,
+  program: String,
+  order_id: Number,
+  created_at: String,
+  sold: Boolean,
+  sold_to: String,
+  sold_at: String,
+});
+
+const CodeOSScheme = mongoose.Schema({
+  code: String,
+  n_months: Number,
+  created_at: String,
+  sold: Boolean,
+  sold_to: String,
+  sold_at: String,
+});
+
 // set the correct time zone
 UserSchema.plugin(timeZone, { paths: ["date", "subDocument.subDate"] });
 // compile schema to model
 const UserModel = mongoose.model("User", UserSchema, "users");
+const CodeOLModel = mongoose.model(
+  "CodeOL",
+  CodeOLScheme,
+  "oxford_learn_codes"
+);
+const CodeOSModel = mongoose.model(
+  "CodeOS",
+  CodeOSScheme,
+  "oxford_solver_codes"
+);
 // ============= MongoDB (END) =============
 
 const client = new Client({
+  puppeteer: {
+    args: ["--no-sandbox"],
+  },
   authStrategy: new LocalAuth(),
 });
 
@@ -66,7 +96,10 @@ const send_welcome_message = (client, chat_id) => {
   const buttons = new Buttons(
     `¡Hola 👋, Gracias por comunicarte con Códigos Oxford Learn 😀!
 \nPor favor seleccione una de las siguientes opciones:`,
-    [{ body: "Código Oxford Learn" }, { body: "Código Oxford Solver" }],
+    [
+      { body: "Plataforma Oxford Learn" },
+      { body: "Soluciónario Oxford Learn" },
+    ],
     name_store,
     "Tienda certificada"
   );
@@ -92,7 +125,7 @@ const send_product_oxford_learn_list = (client, chat_id) => {
     },
   ];
   const list = new List(
-    "Seleccione el nivel para el cual desea adquirir el código de la plataforma Oxford Learn",
+    "Seleccione el nivel dentro de la lista para el cual desea adquirir el código de la plataforma _Oxford Learn_",
     "Niveles",
     sections,
     name_store,
@@ -105,10 +138,10 @@ const send_message_product_oxford_learn_item = async (
   client,
   chat_id,
   name_nivel,
-  program_name
+  program
 ) => {
   const media = await MessageMedia.fromFilePath(
-    `images/codes_mockup/${program_name}.png`
+    `images/codes_mockup/${program}.png`
   );
 
   await client.sendMessage(chat_id, media);
@@ -152,7 +185,10 @@ Si tiene alguna consulta, puede escribirla a continuación, le estaremos respond
 };
 
 const send_product_oxford_solver = async (client, chat_id) => {
-  const media = await MessageMedia.fromFilePath("images/oxford_solver.jpg");
+  const media = await MessageMedia.fromFilePath(
+    "images/oxford_solver/portada.png"
+  );
+
   await client.sendMessage(chat_id, media, {
     caption:
       "*Oxford Solver* es una _extensión web_ que facilita la resolución de la plataforma Oxford Learn _descifrando_ las respuestas de las distintas actividades.",
@@ -161,17 +197,13 @@ const send_product_oxford_solver = async (client, chat_id) => {
   const buttons = new Buttons(
     `*.: Información Oxford Solver :.*
 --------------------------
-📝| *Nivel:* Cualquiera
+📝| *Nivel:* Básico, Intermedio, Pre intermedio, Superior y Avanzado 
 💰| *Costo:* 
-▫️ 1 mes → S/.7 
-▫️ 2 meses → S/.13
-▫️ 3 meses → S/.20
+▫️ 1 mes → S/.6
+▫️ 2 meses → S/.11
 
 ✅Compra segura✅`,
-    [
-      { body: "Tutorial Oxford Solver" },
-      { body: "Formas de pago Oxford Solver" },
-    ],
+    [{ body: "Tutorial Oxford Solver" }, { body: "Formas de pago" }],
     name_store,
     "Tienda certificada"
   );
@@ -181,7 +213,7 @@ const send_product_oxford_solver = async (client, chat_id) => {
 
 const send_tutorial_oxford_solver_message = (client, chat_id) => {
   const message = `📺| *Tutorial:* Como usar Oxford Solver
-https://www.youtube.com/watch?v=n0CdRhm_BeQ
+https://www.youtube.com/watch?v=SQNLQ5RZ0fc
 
 🌐| *Oxford Solver:* https://chrome.google.com/webstore/detail/oxford-solver/jjaofbljcgijjlchgokmgklecjjccabl
 
@@ -189,7 +221,7 @@ https://www.youtube.com/watch?v=n0CdRhm_BeQ
   client.sendMessage(chat_id, message);
 };
 
-const send_books_list = (client, chat_id) => {
+const send_books_list = async (client, chat_id) => {
   const sections = [
     {
       title: "Libros",
@@ -228,7 +260,8 @@ const send_books_list = (client, chat_id) => {
     name_store,
     "Tienda certificada"
   );
-  client.sendMessage(chat_id, list);
+
+  await client.sendMessage(chat_id, list);
 };
 
 const send_book_item = async (client, chat_id, details) => {
@@ -245,101 +278,8 @@ const send_book_item = async (client, chat_id, details) => {
 ◻️| *Audios:* ${book_data.url_audios}
 ◻️| *Videos:* ${book_data.url_videos}
 
-Adquiere tu código para la plataforma Oxford Learn en nuestra tienda: ${book_data.url_oxford_code}`,
+🏷️| Adquiere tu código para la plataforma Oxford Learn en nuestra tienda: ${book_data.url_oxford_code}`,
   });
-
-  // Se procede a comentar por que la libreria no permite enviar archivos pesados :(
-  const buttons = new Buttons(
-    `Seleccione una opción`,
-    [
-      { id: `${id_button}_sb`, body: "Descargar Student Book" },
-      { id: `${id_button}_wb`, body: "Descargar Workbook" },
-    ],
-    name_store,
-    "Tienda certificada"
-  );
-
-  client.sendMessage(chat_id, buttons);
-};
-
-const send_book_file = async (client, chat_id, id_button) => {
-  /* No working: la libreria solo permite enviar ficheros de poco tamaño (aprox menos de 5mb) */
-  if (!id_button) return;
-
-  let name_book = "";
-  let url_oxford_code = "";
-
-  switch (id_button) {
-    case "download_aef_starter_sb":
-      name_book = "American English File 2e Level Starter - Student Book.pdf";
-      url_oxford_code = "https://bit.ly/3xRgkuC";
-      break;
-    case "download_aef_starter_wb":
-      name_book = "American English File 2e Level Starter - Workbook.pdf";
-      url_oxford_code = "https://bit.ly/3xRgkuC";
-      break;
-    case "download_aef_1_sb":
-      name_book = "American English File 2e Level 1 - Student Book.pdf";
-      url_oxford_code = "https://bit.ly/37Rx8af";
-      break;
-    case "download_aef_1_wb":
-      name_book = "American English File 2e Level 1 - Workbook.pdf";
-      url_oxford_code = "https://bit.ly/37Rx8af";
-      break;
-    case "download_aef_2_sb":
-      name_book = "American English File 2e Level 2 - Student Book.pdf";
-      url_oxford_code = "https://bit.ly/3F1W7DP";
-      break;
-    case "download_aef_2_wb":
-      name_book = "American English File 2e Level 2 - Workbook.pdf";
-      url_oxford_code = "https://bit.ly/3F1W7DP";
-      break;
-    case "download_aef_3_sb":
-      name_book = "American English File 2e Level 3 - Student Book.pdf";
-      url_oxford_code = "https://bit.ly/3FmJSSl";
-      break;
-    case "download_aef_3_wb":
-      name_book = "American English File 2e Level 3 - Workbook.pdf";
-      url_oxford_code = "https://bit.ly/3FmJSSl";
-      break;
-    case "download_aef_4_sb":
-      name_book = "American English File 2e Level 4 - Student Book.pdf";
-      url_oxford_code = "https://bit.ly/3yhqBQU";
-      break;
-    case "download_aef_4_wb":
-      name_book = "American English File 2e Level 4 - Workbook.pdf";
-      url_oxford_code = "https://bit.ly/3yhqBQU";
-      break;
-    case "download_aef_5_sb":
-      name_book = "American English File 2e Level 5 - Student Book.pdf";
-      url_oxford_code = "https://bit.ly/3MSKFx5";
-      break;
-    case "download_aef_5_wb":
-      name_book = "American English File 2e Level 5 - Workbook.pdf";
-      url_oxford_code = "https://bit.ly/3MSKFx5";
-      break;
-    default:
-      return;
-  }
-
-  const media = await MessageMedia.fromFilePath(`pdfs/books/${name_book}`);
-
-  await client.sendMessage(
-    chat_id,
-    "Por favor espere, el libro se esta enviando... :D"
-  );
-
-  await client
-    .sendMessage(chat_id, media, {
-      caption: `🏷️| Adquiere tu código para la plataforma _Oxford Learn_ en nuestra tienda: ${url_oxford_code}`,
-    })
-    .then((response) => {
-      console.log("El archivo se envio exitosamente!");
-    })
-    .catch((err) => {
-      console.log("Problemas al enviar el archivo :(");
-      console.log(err);
-    });
 };
 
 const make_client = async (client, chat_id, user_id) => {
@@ -386,7 +326,10 @@ const make_client = async (client, chat_id, user_id) => {
     );
   }
 
-  client.sendMessage(chat_id, "El usuario fue actualizado exitosamente!");
+  client.sendMessage(
+    "51938544411@c.us",
+    `🤖: El usuario ${user_id} fue actualizado exitosamente!`
+  );
 };
 
 const give_permissons = async (client, chat_id, user_id) => {
@@ -432,6 +375,9 @@ const get_user_type = async (found_user, chat_id) => {
 };
 
 const main = async (message) => {
+  message.body = String(message.body).replace(/\n/g, " "); // clean the string -> remove \n
+  message.body = message.body.replace(/\s+/g, " "); // remove duplicate spaces
+
   const chat = await message.getChat();
   const is_group = chat.isGroup;
   let user_id = is_group ? message.id.participant : message.from; // phone number
@@ -456,6 +402,11 @@ const main = async (message) => {
     await update_last_welcome_message_date(chat_id);
     console.log("User last welcome message date updated successfully!");
   } else {
+    let program = null;
+    let order_id = null;
+    let codes = null;
+    let n_months = null;
+
     // prepareting the message.body for the switch
     if (message.body.startsWith("!gpt ")) {
       // chat gpt adition
@@ -470,8 +421,9 @@ const main = async (message) => {
       message.body.startsWith("¡Muchas gracias por preferirnos!") &&
       !is_group
     ) {
+      user_id = chat_id;
       message.body = "!make_client";
-    } else if (message.body.startsWith("!make_client ")) {
+    } else if (message.body.startsWith("!make_client")) {
       phone_number = message.body.replace(/\D/g, ""); // only keep the digits
       try {
         user_id = await client.getNumberId(phone_number);
@@ -480,19 +432,126 @@ const main = async (message) => {
         console.log("Error, el numero es invallido.");
         return;
       }
-      console.log("-> user_id", user_id);
       message.body = "!make_client";
-    } else if (message.body.startsWith("!give_permissons ")) {
+    } else if (message.body.startsWith("!give_permissons")) {
       phone_number = message.body.replace(/\D/g, ""); // only keep the digits
       try {
         user_id = await client.getNumberId(phone_number);
         user_id = user_id._serialized;
+
+        message.body = "!give_permissons";
       } catch {
         console.log("Error, el numero es invallido.");
         return;
       }
-      console.log("-> user_id", user_id);
-      message.body = "!give_permissons";
+    } else if (message.body.startsWith("!add_ol_codes")) {
+      ("use strict");
+      try {
+        const message_split_data = message.body.split(" ");
+
+        if (message_split_data.length <= 3)
+          throw new Error(
+            "El arreglo no tiene el tamaño necesario (mayor a 3)"
+          );
+
+        message.body = message_split_data[0];
+        program = message_split_data[1];
+        order_id = Number(message_split_data[2]);
+        message_split_data.splice(0, 3);
+        codes = message_split_data;
+      } catch (error) {
+        console.log("Error, el mensaje no tiene una estructura valida");
+        console.log(error);
+        return;
+      }
+    } else if (message.body.startsWith("!add_os_codes")) {
+      ("use strict");
+      try {
+        const message_split_data = message.body.split(" ");
+        console.log(message_split_data);
+
+        if (message_split_data.length <= 2)
+          throw new Error(
+            "El arreglo no tiene el tamaño necesario (mayor a 2)"
+          );
+
+        message.body = message_split_data[0];
+        n_months = Number(message_split_data[1]);
+        message_split_data.splice(0, 2);
+        codes = message_split_data;
+      } catch (error) {
+        console.log("Error, el mensaje no tiene una estructura valida");
+        console.log(error);
+        return;
+      }
+    } else if (message.body.startsWith("!send_ol_code")) {
+      ("use strict");
+      try {
+        const message_split_data = message.body.split(" ");
+
+        if (message_split_data.length <= 1)
+          throw new Error(
+            "El arreglo no tiene el tamaño necesario (mayor a 1)"
+          );
+
+        message.body = message_split_data[0];
+        program = message_split_data[1];
+      } catch (error) {
+        console.log("Error, el mensaje no tiene una estructura valida");
+        console.log(error);
+        return;
+      }
+    } else if (message.body.startsWith("!send_os_code")) {
+      ("use strict");
+      try {
+        const message_split_data = message.body.split(" ");
+
+        if (message_split_data.length <= 1)
+          throw new Error(
+            "El arreglo no tiene el tamaño necesario (mayor a 1)"
+          );
+
+        message.body = message_split_data[0];
+        n_months = Number(message_split_data[1]);
+      } catch (error) {
+        console.log("Error, el mensaje no tiene una estructura valida");
+        console.log(error);
+        return;
+      }
+    } else if (message.body.startsWith("!count_available_ol_codes")) {
+      ("use strict");
+      try {
+        const message_split_data = message.body.split(" ");
+
+        if (message_split_data.length <= 1)
+          throw new Error(
+            "El arreglo no tiene el tamaño necesario (mayor a 1)"
+          );
+
+        message.body = message_split_data[0];
+        program = message_split_data[1];
+      } catch (error) {
+        console.log("Error, el mensaje no tiene una estructura valida");
+        console.log(error);
+        return;
+      }
+    } else if (message.body.startsWith("!count_available_os_codes")) {
+      ("use strict");
+      try {
+        const message_split_data = message.body.split(" ");
+
+        if (message_split_data.length <= 1)
+          throw new Error(
+            "El arreglo no tiene el tamaño necesario (mayor a 1)"
+          );
+
+        message.body = message_split_data[0];
+        n_months = Number(message_split_data[1]);
+      } catch (error) {
+        console.log("Error, el mensaje no tiene una estructura valida");
+        console.log(error);
+        return;
+      }
     }
 
     switch (message.body) {
@@ -504,13 +563,9 @@ const main = async (message) => {
         }
         break;
       case "!books":
-        if (user_type === "admin" || user_type === "with_permissions") {
-          send_books_list(client, chat_id);
-        } else {
-          console.log("No eres admi xd");
-        }
+        send_books_list(client, chat_id);
         break;
-      case "Básico 1 a 6\nAmerican English File 2ed Level Starter":
+      case "Básico 1 a 6 American English File 2ed Level Starter":
         details = {
           book_data: {
             name_book: "American English File Starter",
@@ -525,7 +580,7 @@ const main = async (message) => {
         };
         send_book_item(client, chat_id, details);
         break;
-      case "Básico 7 a 12\nAmerican English File 2ed Level 1":
+      case "Básico 7 a 12 American English File 2ed Level 1":
         details = {
           book_data: {
             name_book: "American English File 1",
@@ -540,7 +595,7 @@ const main = async (message) => {
         };
         send_book_item(client, chat_id, details);
         break;
-      case "Pre intermedio 1 a 6\nAmerican English File 2ed Level 2":
+      case "Pre intermedio 1 a 6 American English File 2ed Level 2":
         details = {
           book_data: {
             name_book: "American English File 2",
@@ -555,7 +610,7 @@ const main = async (message) => {
         };
         send_book_item(client, chat_id, details);
         break;
-      case "Intermedio 1 a 5\nAmerican English File 2ed Level 3":
+      case "Intermedio 1 a 5 American English File 2ed Level 3":
         details = {
           book_data: {
             name_book: "American English File 3",
@@ -570,7 +625,7 @@ const main = async (message) => {
         };
         send_book_item(client, chat_id, details);
         break;
-      case "Superior 1 a 5\nAmerican English File 2ed Level 4":
+      case "Superior 1 a 5 American English File 2ed Level 4":
         details = {
           book_data: {
             name_book: "American English File 4",
@@ -585,10 +640,10 @@ const main = async (message) => {
         };
         send_book_item(client, chat_id, details);
         break;
-      case "Avanzando 1 a 5\nAmerican English File 2ed Level 5":
+      case "Avanzando 1 a 5 American English File 2ed Level 5":
         details = {
           book_data: {
-            name_book: "American English File 5",
+            name_book: "American English File 4",
             nivel: "Avanzado 1 - 5",
             url_books: "https://bit.ly/3sgFcIE",
             url_audios: "https://bit.ly/3Fo36al",
@@ -600,21 +655,17 @@ const main = async (message) => {
         };
         send_book_item(client, chat_id, details);
         break;
-      case "Descargar Student Book":
-      case "Descargar Workbook":
-        send_book_file(client, chat_id, message.selectedButtonId);
-        break;
-      case "Código Oxford Learn":
+      case "Plataforma Oxford Learn":
         if (!is_group) {
           send_product_oxford_learn_list(client, chat_id);
         }
         break;
-      case "Código Oxford Solver":
+      case "Soluciónario Oxford Learn":
         if (!is_group) {
           send_product_oxford_solver(client, chat_id);
         }
         break;
-      case "Básico 1 a 6\nCELEN UNA PUNO":
+      case "Básico 1 a 6 CELEN UNA PUNO":
         send_message_product_oxford_learn_item(
           client,
           chat_id,
@@ -622,7 +673,7 @@ const main = async (message) => {
           "a1"
         );
         break;
-      case "Básico 7 a 12\nCELEN UNA PUNO":
+      case "Básico 7 a 12 CELEN UNA PUNO":
         send_message_product_oxford_learn_item(
           client,
           chat_id,
@@ -630,7 +681,7 @@ const main = async (message) => {
           "a2"
         );
         break;
-      case "Pre intermedio 1 a 6\nCELEN UNA PUNO":
+      case "Pre intermedio 1 a 6 CELEN UNA PUNO":
         send_message_product_oxford_learn_item(
           client,
           chat_id,
@@ -638,7 +689,7 @@ const main = async (message) => {
           "b1"
         );
         break;
-      case "Intermedio 1 a 5\nCELEN UNA PUNO":
+      case "Intermedio 1 a 5 CELEN UNA PUNO":
         send_message_product_oxford_learn_item(
           client,
           chat_id,
@@ -646,7 +697,7 @@ const main = async (message) => {
           "b1+"
         );
         break;
-      case "Superior 1 a 5\nCELEN UNA PUNO":
+      case "Superior 1 a 5 CELEN UNA PUNO":
         send_message_product_oxford_learn_item(
           client,
           chat_id,
@@ -654,7 +705,7 @@ const main = async (message) => {
           "b2"
         );
         break;
-      case "Avanzando 1 a 5\nCELEN UNA PUNO":
+      case "Avanzando 1 a 5 CELEN UNA PUNO":
         send_message_product_oxford_learn_item(
           client,
           chat_id,
@@ -664,7 +715,6 @@ const main = async (message) => {
         break;
       case "!pagos":
       case "Formas de pago":
-      case "Formas de pago Oxford Solver":
         if (!is_group) {
           send_formas_pago_message(client, chat_id);
         }
@@ -674,7 +724,7 @@ const main = async (message) => {
         break;
       case "!make_client":
         if (user_type === "admin") {
-          make_client(client, chat_id);
+          make_client(client, chat_id, user_id);
         } else {
           console.log("No eres admi xd");
         }
@@ -688,12 +738,78 @@ const main = async (message) => {
         break;
       case "!gpt":
         if (
-          (is_group && user_type === "admin") ||
-          user_type === "with_permissions"
+          (is_group && user_type === "with_permissions") ||
+          user_type === "admin"
         ) {
           chat_gpt(message, question);
         } else {
           console.log("No tienes permisos");
+        }
+        break;
+      case "!add_ol_codes":
+        // crear los respectivos documentos
+        if (user_type === "admin" && chat_id === "51938544411@c.us") {
+          add_oxford_learn_codes(client, chat_id, codes, program, order_id);
+        } else {
+          console.log(
+            "No tienes los permisos necesarios o no te encuentras en tu chat personal"
+          );
+        }
+        break;
+      case "!add_os_codes":
+        // crear los respectivos documentos
+        if (user_type === "admin" && chat_id === "51938544411@c.us") {
+          add_oxford_solver_codes(client, chat_id, codes, n_months);
+        } else {
+          console.log(
+            "No tienes los permisos necesarios o no te encuentras en tu chat personal"
+          );
+        }
+        break;
+      case "!send_ol_code":
+        if (user_type === "admin" && !is_group) {
+          await send_ol_code(program, client, chat_id);
+          await new Promise((resolve) => setTimeout(resolve, 3000)); // wait 3 seconds
+          await send_os_code(1, client, chat_id); // enviando código oxford solver de regalo
+        } else {
+          console.log(
+            "No eres admin o estas enviando el mensaje dentro de un grupo"
+          );
+        }
+        break;
+      case "!send_os_code":
+        if (user_type === "admin" && !is_group) {
+          send_os_code(n_months, client, chat_id);
+        } else {
+          console.log(
+            "No eres admin o estas enviando el mensaje dentro de un grupo"
+          );
+        }
+        break;
+      case "!count_available_ol_codes":
+        if (
+          user_type === "admin" &&
+          !is_group &&
+          chat_id === "51938544411@c.us"
+        ) {
+          count_available_ol_codes(program, client, chat_id);
+        } else {
+          console.log(
+            "Este comando solo puedes ser usado en el propio chat del admi"
+          );
+        }
+        break;
+      case "!count_available_os_codes":
+        if (
+          user_type === "admin" &&
+          !is_group &&
+          chat_id === "51938544411@c.us"
+        ) {
+          count_available_os_codes(n_months, client, chat_id);
+        } else {
+          console.log(
+            "Este comando solo puedes ser usado en el propio chat del admi"
+          );
         }
         break;
       default:
@@ -702,10 +818,172 @@ const main = async (message) => {
   }
 };
 
+const count_available_os_codes = async (n_months, client, chat_id) => {
+  let found_code = await CodeOSModel.find({
+    n_months: n_months,
+    sold: false,
+  });
+
+  const n_available_os_codes = found_code.length;
+
+  client.sendMessage(
+    chat_id,
+    `🤖: Se tienen *${n_available_os_codes}* códigos *Oxford Solver* disponibles (sin vender).\nNum. meses: *${n_months}*`
+  );
+};
+
+const count_available_ol_codes = async (program, client, chat_id) => {
+  let found_code = await CodeOLModel.find({
+    program: program,
+    sold: false,
+  });
+
+  const n_available_ol_codes = found_code.length;
+
+  client.sendMessage(
+    chat_id,
+    `🤖: Se tienen *${n_available_ol_codes}* códigos *Oxford Learn* disponibles (sin vender).\nPrograma: *${program}*`
+  );
+};
+
+const send_os_code = async (n_months, client, chat_id) => {
+  // verificar en la db si existe almenos un codigo que aun no fue vendido
+  let found_code = await CodeOSModel.findOne({
+    sold: false,
+    n_months: n_months,
+  });
+
+  if (found_code) {
+    // si existen, enviar el código al usuario
+    try {
+      const media = MessageMedia.fromFilePath(
+        "images/oxford_solver/portada.png"
+      );
+
+      await client
+        .sendMessage(chat_id, media, {
+          caption: `*Oxford Solver* es una _extensión web_ que facilita la resolución de la plataforma Oxford Learn _descifrando_ las respuestas de las distintas actividades.
+
+🗝️| *Código*: ${found_code.code}
+
+⏳| *Duración*: ${
+            found_code.n_months > 1
+              ? found_code.n_months + " meses"
+              : "mes actual"
+          }
+
+🌐| *Instalador:* https://chrome.google.com/webstore/detail/oxford-solver/jjaofbljcgijjlchgokmgklecjjccabl
+
+📺| *Tutorial:* Como usar Oxford Solver
+https://www.youtube.com/watch?v=SQNLQ5RZ0fc
+
+*Nota:* Se recomienda el uso del navegador _Chrome_ para evitar inconvenientes.`,
+        })
+        .then(async (response) => {
+          await CodeOSModel.findOneAndUpdate(
+            { code: found_code.code },
+            { sold: true, sold_to: chat_id, sold_at: new Date().toString() }
+          );
+        })
+        .catch((error) => {
+          console.log("Error", error);
+        });
+    } catch (error) {
+      // enviarme mensaje para informarme del error
+      await client.sendMessage("51938544411@c.us", "🤖: " + String(error));
+    }
+  } else {
+    // enviarme mensaje para informarme del error
+    client.sendMessage(
+      "51938544411@c.us",
+      `🤖: No se encontro ningun código disponible.\nn_meses: ${n_months}`
+    );
+  }
+};
+
+const send_ol_code = async (program, client, chat_id) => {
+  // verificar en la db si existe alemnos un codigo que aun no fue vendidos para x programa
+  let found_code = await CodeOLModel.findOne({
+    program: program,
+    sold: false,
+  });
+
+  if (found_code) {
+    // si existen, enviar el código al usuario (con su pdf)
+    try {
+      const media = MessageMedia.fromFilePath(
+        `codes/oxford_learn/${found_code.program}/${found_code.order_id}/${found_code.code}.pdf`
+      );
+
+      await client
+        .sendMessage(chat_id, media, {
+          caption: `¡Muchas gracias por preferirnos! Esperamos poder servirte nuevamente.
+
+No olvides unirte y seguirnos en nuestras redes sociales:
+📢| Página de FB: https://fb.me/CodigosOxfordLearn
+📣| Grupo de WhatsApp:
+https://chat.whatsapp.com/FT5MFs7rT8I5vw7VNl8XvQ
+📣| Grupo de Facebook:
+https://web.facebook.com/groups/497660311980677/
+📣| Grupo de Telegram:  
+https://t.me/CELEN_UNAPUNO`,
+        })
+        .then(async (response) => {
+          await CodeOLModel.findOneAndUpdate(
+            { code: found_code.code, order_id: found_code.order_id },
+            { sold: true, sold_to: chat_id, sold_at: new Date().toString() }
+          );
+        })
+        .catch((error) => {
+          console.log("Error", error);
+        });
+    } catch (error) {
+      // enviarme mensaje para informarme del error
+      await client.sendMessage("51938544411@c.us", "🤖: " + String(error));
+    }
+  } else {
+    // enviarme mensaje para informarme del error
+    await client.sendMessage(
+      "51938544411@c.us",
+      `🤖: No se encontro ningun código disponible.\nPrograma: ${program}`
+    );
+  }
+};
+
+const add_oxford_learn_codes = (client, chat_id, codes, program, order_id) => {
+  try {
+    for (const code of codes) {
+      create_oxford_learn_code(code, program, order_id);
+    }
+    client.sendMessage(
+      chat_id,
+      "🤖: Los códigos *Oxford Learn* fueron guardados exitosamente!"
+    );
+  } catch (error) {
+    console.log("Ocurrio un error al almacenar los códigos :(");
+    console.log(error);
+  }
+};
+
+const add_oxford_solver_codes = (client, chat_id, codes, n_months) => {
+  try {
+    for (const code of codes) {
+      create_oxford_solver_code(code, n_months);
+    }
+
+    client.sendMessage(
+      chat_id,
+      "🤖: Los códigos *Oxford Solver* fueron guardados exitosamente!"
+    );
+  } catch (error) {
+    console.log("Ocurrio un error al almacenar los códigos :(");
+    console.log(error);
+  }
+};
+
 const chat_gpt = async (message, question) => {
   try {
-    const answer = await bot.ask(question);
-    message.reply(answer.trim());
+    message.reply("no working");
   } catch {
     console.log("ChatGPT no working :(");
   }
@@ -714,7 +992,7 @@ const chat_gpt = async (message, question) => {
 // when a message is sended include my own messages
 client.on("message_create", async (message) => {
   console.log("Mensaje entrante");
-  main(message);
+  //main(message);
 });
 
 // ======== Auxiliary functions ========
@@ -750,6 +1028,37 @@ const create_user = (
 
   // save model to database
   user.save();
+};
+
+const create_oxford_learn_code = (code, program, order_id) => {
+  // a document instance
+  const new_code = new CodeOLModel({
+    code: code,
+    program: program,
+    order_id: order_id,
+    created_at: new Date().toString(),
+    sold: false,
+    sold_to: null,
+    sold_at: null,
+  });
+
+  // save model to database
+  new_code.save();
+};
+
+const create_oxford_solver_code = (code, n_months) => {
+  // a document instance
+  const new_code = new CodeOSModel({
+    code: code,
+    n_months: n_months,
+    created_at: new Date().toString(),
+    sold: false,
+    sold_to: null,
+    sold_at: null,
+  });
+
+  // save model to database
+  new_code.save();
 };
 
 const get_send_welcome_message = async (user, user_id) => {
